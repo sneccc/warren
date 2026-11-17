@@ -22,7 +22,16 @@
  * and `exited` for awaiting the exit code.
  */
 
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { buildBwrapArgv, SANDBOX_HOME_PATH } from "./bwrap.ts";
@@ -110,6 +119,53 @@ async function spawnDarwin(
 	};
 }
 
+// WARREN-HOST-MODE-PATCH: read ~/.warren/sandbox-mode at every spawn.
+function hostModeOn(): boolean {
+	try {
+		const f = `${process.env.HOME ?? ""}/.warren/sandbox-mode`;
+		return readFileSync(f, "utf8").trim() === "host";
+	} catch {
+		return false;
+	}
+}
+function hostModeBinds(): string[] {
+	const home = process.env.HOME ?? "";
+	const a: string[] = [
+		"--dev-bind",
+		"/dev",
+		"/dev",
+		"--bind",
+		"/mnt",
+		"/mnt",
+		"--bind",
+		"/run",
+		"/run",
+	];
+	if (existsSync("/init")) a.push("--ro-bind", "/init", "/init");
+	if (home) {
+		a.push("--bind", home, home);
+		if (existsSync(`${home}/.warren`)) a.push("--tmpfs", `${home}/.warren`);
+	}
+	return a;
+}
+function hostModeEnv(): Record<string, string> {
+	const out: Record<string, string> = {};
+	const cur = process.env.WSL_INTEROP;
+	if (cur && existsSync(cur)) {
+		out.WSL_INTEROP = cur;
+		return out;
+	}
+	try {
+		const socks = readdirSync("/run/WSL")
+			.filter((n) => n.endsWith("_interop"))
+			.map((n) => ({ n, t: statSync(`/run/WSL/${n}`).mtimeMs }))
+			.sort((x, y) => y.t - x.t);
+		const newest = socks[0];
+		if (newest) out.WSL_INTEROP = `/run/WSL/${newest.n}`;
+	} catch {}
+	return out;
+}
+
 async function spawnLinux(
 	profile: SandboxProfile,
 	command: SpawnCommand,
@@ -132,12 +188,26 @@ async function spawnLinux(
 	// host tool resolvable without leaking the full host PATH into the child.
 	const bwrapBin = options.bwrapBin ?? Bun.which("bwrap") ?? "bwrap";
 	let argv = buildBwrapArgv(profile, command, { bwrapBin });
+	const hostMode = hostModeOn();
+	if (hostMode) {
+		// Keep the real user id. A fake --uid/--gid breaks the WSL interop call.
+		for (const flag of ["--uid", "--gid"]) {
+			const i = argv.indexOf(flag);
+			if (i >= 0) argv.splice(i, 2);
+		}
+		const sep = argv.indexOf("--");
+		argv = [...argv.slice(0, sep), ...hostModeBinds(), ...argv.slice(sep)];
+	}
 	if (cgroup) argv = wrapArgvForCgroup(argv, cgroup.procsPath);
 	const env = resolveSandboxEnv(profile, command, {
 		homePath: SANDBOX_HOME_PATH,
 		hostEnv: process.env,
 		workspacePath: "/workspace",
 	});
+	if (hostMode) {
+		Object.assign(env, hostModeEnv());
+		env.PATH = `${env.PATH ?? "/usr/bin:/bin"}:/usr/lib/wsl/lib`;
+	}
 	const wantsStdin = command.stdin !== undefined;
 	// `env` here becomes bwrap's process env (replacing process.env entirely,
 	// not merging with it). bwrap then execve()s the child with that same env,
