@@ -128,6 +128,21 @@ export class HotForge implements Forge {
 		return this.delegate.setPullRequestBody(ref, pr, body);
 	}
 
+	async commentOnPullRequest(
+		ref: Parameters<Forge["setPullRequestBody"]>[0],
+		pr: Parameters<Forge["setPullRequestBody"]>[1],
+		body: string,
+	) {
+		const send = this.delegate.commentOnPullRequest;
+		if (send === undefined) {
+			return {
+				ok: false as const,
+				error: { kind: "unsupported" as const, detail: "forge cannot comment on pull requests" },
+			};
+		}
+		return send.call(this.delegate, ref, pr, body);
+	}
+
 	listChecks(ref: Parameters<Forge["listChecks"]>[0], commit: Parameters<Forge["listChecks"]>[1]) {
 		return this.delegate.listChecks(ref, commit);
 	}

@@ -295,6 +295,27 @@ export class GitHubForge implements Forge {
 		return ok(undefined);
 	}
 
+	/** A PR thread is an issue thread on GitHub: POST /issues/:n/comments. */
+	async commentOnPullRequest(
+		ref: RepoRef,
+		pr: PullRequestRef,
+		body: string,
+	): Promise<ForgeResult<void>> {
+		const minted = await this.mint(ref);
+		if (!minted.ok) return err(minted.error);
+		const result = await requestGitHub({
+			url: `${GITHUB_API_BASE}/repos/${this.slug(ref)}/issues/${pr.number}/comments`,
+			method: "POST",
+			token: minted.value.secret,
+			userAgent: USER_AGENT,
+			context: `POST /issues/${pr.number}/comments`,
+			body: { body },
+			fetch: this.fetch,
+		});
+		if (!result.ok) return err(toForgeError(result.error));
+		return ok(undefined);
+	}
+
 	async listChecks(ref: RepoRef, commit: string): Promise<ForgeResult<CheckSummary>> {
 		if (!this.capabilities.checkRuns) {
 			return err({

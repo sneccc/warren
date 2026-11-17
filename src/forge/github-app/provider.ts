@@ -207,6 +207,10 @@ export class GitHubAppForge implements Forge {
 		return this.transport.setPullRequestBody(ref, pr, body);
 	}
 
+	commentOnPullRequest(ref: RepoRef, pr: Parameters<Forge["setPullRequestBody"]>[1], body: string) {
+		return this.transport.commentOnPullRequest(ref, pr, body);
+	}
+
 	listChecks(ref: RepoRef, commit: string) {
 		return this.transport.listChecks(ref, commit);
 	}

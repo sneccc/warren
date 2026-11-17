@@ -29,6 +29,7 @@ import { dispatchAutoPlanRuns, hasAutoPlanRunFrontmatter, parsePlanIds } from ".
 import { applyK8sCloneDeltas } from "./clone-apply.ts";
 import { runProviderFinalize } from "./finalize-intent.ts";
 import { type DiffStats, recordOutcomeFacts } from "./outcome-facts.ts";
+import { postOwnerQuestions } from "./owner-questions.ts";
 import { type OpenedPr, prOpenStep } from "./pr-open.ts";
 import { runPreviewAnnotate, runPreviewLaunch } from "./preview.ts";
 import type { ReapExec, ReapFs, ReapRunInput, ReapStep } from "./types.ts";
@@ -398,6 +399,34 @@ async function previewAnnotateStep(
 	});
 }
 
+/**
+ * Lift the agent's "Questions for the owner" block out of the PR body and
+ * post it as a PR comment. Only for a PR this run just created, so a re-run
+ * on an existing PR never posts the same comment twice.
+ */
+async function ownerQuestionsStep(
+	ctx: ReapPipelineContext,
+	state: ReapPipelineState,
+): Promise<void> {
+	const { openedPr } = state;
+	if (
+		openedPr === null ||
+		openedPr.mode !== "created" ||
+		ctx.input.autoOpenPr?.enabled !== true ||
+		ctx.input.forge === undefined
+	) {
+		return;
+	}
+	await postOwnerQuestions({
+		runId: ctx.run.id,
+		forge: ctx.input.forge,
+		repoRef: openedPr.repoRef,
+		prRef: openedPr.prRef,
+		prBody: openedPr.body,
+		fail: ctx.fail,
+	});
+}
+
 /** Zeroed finalize result used when the seam call itself throws (best-effort). */
 function emptyFinalizeResult(): FinalizeResult {
 	return {
@@ -488,4 +517,5 @@ export async function runReapPipeline(
 	await prOpenStep(ctx, state);
 	await previewLaunchStep(ctx, state);
 	await previewAnnotateStep(ctx, state);
+	await ownerQuestionsStep(ctx, state);
 }

@@ -348,6 +348,13 @@ export interface Forge {
 	setPullRequestBody(ref: RepoRef, pr: PullRequestRef, body: string): Promise<ForgeResult<void>>;
 
 	/**
+	 * OPTIONAL. Post one comment on a PR thread. Reap uses it to lift an
+	 * agent's "Questions for the owner" block out of the PR body so the owner
+	 * can answer in the thread. A forge without it just skips the comment.
+	 */
+	commentOnPullRequest?(ref: RepoRef, pr: PullRequestRef, body: string): Promise<ForgeResult<void>>;
+
+	/**
 	 * Read CI state for a commit. Gated by `capabilities.checkRuns` — a
 	 * fine-grained PAT cannot reach this API at all (§5, §6.7).
 	 */
