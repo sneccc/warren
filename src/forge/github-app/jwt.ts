@@ -18,7 +18,7 @@
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
 
 /** JWT lifetime: GitHub's documented maximum for App JWTs is 10 minutes. */
-export const GITHUB_APP_JWT_TTL_SECONDS = 600;
+export const GITHUB_APP_JWT_TTL_SECONDS = 480;
 
 /** `iat` is backdated to tolerate clock skew between warren and GitHub. */
 export const GITHUB_APP_JWT_IAT_BACKDATE_SECONDS = 60;
