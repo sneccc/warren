@@ -144,7 +144,19 @@ function hostModeBinds(): string[] {
 	if (existsSync("/init")) a.push("--ro-bind", "/init", "/init");
 	if (home) {
 		a.push("--bind", home, home);
-		if (existsSync(`${home}/.warren`)) a.push("--tmpfs", `${home}/.warren`);
+		// Hide the secret files only. The git dirs of the run workspaces live
+		// under ~/.warren/data, so the folder itself must stay visible.
+		for (const rel of [
+			"env",
+			"client.json",
+			"data/operator-token",
+			"data/warren.db",
+			"data/warren.db-wal",
+			"data/warren.db-shm",
+		]) {
+			const p = `${home}/.warren/${rel}`;
+			if (existsSync(p)) a.push("--ro-bind", "/dev/null", p);
+		}
 	}
 	return a;
 }
